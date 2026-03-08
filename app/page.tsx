@@ -1,65 +1,78 @@
-import Image from "next/image";
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+
+const EXAMPLE_TOPICS = [
+  "现在的孩子应该「快乐教育」还是「精英教育」？",
+  "人工智能的发展对人类是利大于弊还是弊大于利？",
+  "大学生应该先就业还是先考研？",
+  "网络匿名发言应该被限制还是被保障？",
+  "远程办公会取代传统办公吗？",
+];
 
 export default function Home() {
+  const [topic, setTopic] = useState("");
+  const router = useRouter();
+
+  const startDebate = () => {
+    if (!topic.trim()) return;
+    router.push(`/debate?topic=${encodeURIComponent(topic.trim())}`);
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <main className="min-h-screen flex flex-col items-center justify-center px-4">
+      <div className="w-full max-w-2xl text-center">
+        {/* Logo */}
+        <div className="mb-8">
+          <div className="inline-flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-red-500 flex items-center justify-center text-white font-bold text-lg">
+              辩
+            </div>
+            <h1 className="text-3xl font-bold tracking-tight">AI 辩论场</h1>
+          </div>
+          <p className="text-gray-500 text-sm">
+            输入辩题，两位 AI 将代表正反方进行一场完整辩论
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+
+        {/* Input */}
+        <div className="relative mb-6">
+          <input
+            type="text"
+            value={topic}
+            onChange={(e) => setTopic(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && startDebate()}
+            placeholder="输入辩论主题..."
+            className="w-full px-5 py-4 text-lg border border-gray-200 rounded-2xl bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+          />
+          <button
+            onClick={startDebate}
+            disabled={!topic.trim()}
+            className="absolute right-2 top-1/2 -translate-y-1/2 px-6 py-2.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl font-medium hover:from-blue-700 hover:to-blue-600 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            开始辩论
+          </button>
         </div>
-      </main>
-    </div>
+
+        {/* Examples */}
+        <div className="space-y-2">
+          <p className="text-xs text-gray-400 uppercase tracking-wider">
+            试试这些辩题
+          </p>
+          <div className="flex flex-wrap justify-center gap-2">
+            {EXAMPLE_TOPICS.map((t) => (
+              <button
+                key={t}
+                onClick={() => setTopic(t)}
+                className="px-3 py-1.5 text-sm text-gray-600 bg-white border border-gray-200 rounded-lg hover:border-gray-300 hover:text-gray-800 transition-all"
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </main>
   );
 }
