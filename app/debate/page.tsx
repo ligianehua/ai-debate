@@ -10,6 +10,7 @@ interface DebateEntry {
   speaker: string;
   side: "pro" | "con";
   content: string;
+  personality?: string;
 }
 
 // ============ TTS Hook ============
@@ -144,7 +145,7 @@ function DebateContent() {
 
       setIsStreaming(false);
       setStreamingText("");
-      return { stageId: stage.id, stageName, speaker, side, content: fullText } as DebateEntry;
+      return { stageId: stage.id, stageName, speaker, side, content: fullText, personality: stage.personality } as DebateEntry;
     },
     [topic]
   );
@@ -351,6 +352,7 @@ function DebateCard({ entry, streaming = false, speakingId, onSpeak }: {
     <div className={`animate-fade-in rounded-xl border overflow-hidden ${isPro ? "border-blue-100 bg-white" : "border-red-100 bg-white"}`}>
       <div className={`flex items-center gap-2 px-3 py-2 border-b ${isPro ? "border-blue-50 bg-blue-50/40" : "border-red-50 bg-red-50/40"}`}>
         <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${isPro ? "bg-blue-100 text-blue-700" : "bg-red-100 text-red-700"}`}>{entry.speaker}</span>
+        {entry.personality && <span className="px-1.5 py-0.5 rounded text-xs bg-gray-100 text-gray-500">#{entry.personality}</span>}
         <span className="text-xs text-gray-400 flex-1">{entry.stageName}</span>
         {streaming ? (
           <span className="text-xs text-gray-400 animate-pulse-dot">发言中...</span>
