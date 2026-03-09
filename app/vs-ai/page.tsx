@@ -15,6 +15,32 @@ interface ChatEntry {
   side: "pro" | "con";
   content: string;
   speaker: string; // "你" or alias
+  timestamp?: number; // 发言时间戳（ms）
+  stageIndex?: number; // 所属阶段索引
+}
+
+// ============ 辩论阶段定义 ============
+const VS_AI_STAGES = [
+  { name: "开篇立论", icon: "①", description: "亮明立场，抛出核心论点" },
+  { name: "驳论反击", icon: "②", description: "针对对方论点进行反驳" },
+  { name: "质辩交锋", icon: "③", description: "追问漏洞，设置逻辑陷阱" },
+  { name: "自由辩论", icon: "④", description: "快速攻防，自由交锋" },
+];
+
+/** 根据 entry 数量计算当前阶段 index（每2条=1个完整回合） */
+function getStageIndex(entryCount: number): number {
+  const round = Math.floor(entryCount / 2); // 完整回合数
+  if (round <= 0) return 0; // 开篇立论
+  if (round === 1) return 1; // 驳论反击
+  if (round === 2) return 2; // 质辩交锋
+  return 3; // 自由辩论
+}
+
+/** 格式化秒数为 mm:ss */
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
 }
 
 // ============ TTS Hook ============
@@ -54,13 +80,52 @@ function useTTS() {
   return { speakingId, speak, stop };
 }
 
+// ============ Timer Hook ============
+function useDebateTimer() {
+  const [totalSeconds, setTotalSeconds] = useState(0);
+  const [stageTimes, setStageTimes] = useState<number[]>([0, 0, 0, 0]); // 每阶段累计秒数
+  const [currentStage, setCurrentStage] = useState(0);
+  const [isRunning, setIsRunning] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const start = useCallback(() => setIsRunning(true), []);
+  const stop = useCallback(() => setIsRunning(false), []);
+
+  const updateStage = useCallback((newStage: number) => {
+    setCurrentStage(newStage);
+  }, []);
+
+  useEffect(() => {
+    if (isRunning) {
+      intervalRef.current = setInterval(() => {
+        setTotalSeconds((t) => t + 1);
+        setStageTimes((prev) => {
+          const next = [...prev];
+          next[currentStage] = (next[currentStage] || 0) + 1;
+          return next;
+        });
+      }, 1000);
+    } else if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [isRunning, currentStage]);
+
+  return { totalSeconds, stageTimes, currentStage, start, stop, updateStage };
+}
+
 // ============ PDF Download ============
 function generatePdfHtml(
   topic: string,
   entries: ChatEntry[],
   report: string,
   userSide: "pro" | "con",
-  aiAlias: string
+  aiAlias: string,
+  stageTimes?: number[],
+  totalTime?: number
 ): string {
   const debateHtml = entries
     .map((e) => {
@@ -112,6 +177,18 @@ function generatePdfHtml(
 <div class="subtitle">辩题：${topic}<br/>你（${
     userSide === "pro" ? "正方" : "反方"
   }） vs ${aiAlias}（${userSide === "pro" ? "反方" : "正方"}）</div>
+${stageTimes && totalTime ? `
+<div style="display:flex;gap:12px;justify-content:center;margin-bottom:30px;flex-wrap:wrap;">
+  ${VS_AI_STAGES.map((s, i) => `<div style="text-align:center;padding:8px 16px;background:#f9fafb;border-radius:8px;border:1px solid #e5e7eb;">
+    <div style="font-size:11px;color:#888;">${s.icon} ${s.name}</div>
+    <div style="font-size:16px;font-weight:bold;color:#333;font-family:monospace;">${formatTime(stageTimes[i] || 0)}</div>
+  </div>`).join("")}
+  <div style="text-align:center;padding:8px 16px;background:#f0f9ff;border-radius:8px;border:1px solid #bae6fd;">
+    <div style="font-size:11px;color:#888;">总计</div>
+    <div style="font-size:16px;font-weight:bold;color:#1d4ed8;font-family:monospace;">${formatTime(totalTime)}</div>
+  </div>
+</div>
+` : ""}
 <div class="section-title">📜 辩论全文</div>
 ${debateHtml}
 ${
@@ -130,9 +207,11 @@ function downloadPdf(
   entries: ChatEntry[],
   report: string,
   userSide: "pro" | "con",
-  aiAlias: string
+  aiAlias: string,
+  stageTimes?: number[],
+  totalTime?: number
 ) {
-  const html = generatePdfHtml(topic, entries, report, userSide, aiAlias);
+  const html = generatePdfHtml(topic, entries, report, userSide, aiAlias, stageTimes, totalTime);
   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -175,6 +254,7 @@ function VsAiContent() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
   const { speakingId, speak, stop: stopTTS } = useTTS();
+  const timer = useDebateTimer();
 
   // 自动滚动到底部
   const scrollToBottom = useCallback(() => {
@@ -276,14 +356,18 @@ function VsAiContent() {
   useEffect(() => {
     if (!hasStarted.current && topic) {
       hasStarted.current = true;
+      timer.start();
       (async () => {
         const aiEntry = await fetchAiResponse([], 0);
         if (aiEntry) {
+          aiEntry.timestamp = Date.now();
+          aiEntry.stageIndex = 0;
           setEntries([aiEntry]);
           setRoundNumber(1);
         }
       })();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topic, fetchAiResponse]);
 
   // ====== 用户发言 ======
@@ -291,11 +375,15 @@ function VsAiContent() {
     const text = userInput.trim();
     if (!text || isAiThinking || isFinished) return;
 
+    const curStage = getStageIndex(entries.length);
+
     const userEntry: ChatEntry = {
       role: "user",
       side: userSide,
       content: text,
       speaker: "你",
+      timestamp: Date.now(),
+      stageIndex: curStage,
     };
 
     const newEntries = [...entries, userEntry];
@@ -303,13 +391,29 @@ function VsAiContent() {
     setUserInput("");
     setRoundNumber((r) => r + 1);
 
+    // 更新计时器阶段
+    const nextStage = getStageIndex(newEntries.length);
+    if (nextStage !== timer.currentStage) {
+      timer.updateStage(nextStage);
+    }
+
     // 聚焦回输入框
     setTimeout(() => textareaRef.current?.focus(), 50);
 
     // AI 回应
     const aiEntry = await fetchAiResponse(newEntries, roundNumber + 1);
     if (aiEntry) {
-      setEntries((prev) => [...prev, aiEntry]);
+      aiEntry.timestamp = Date.now();
+      aiEntry.stageIndex = getStageIndex(newEntries.length);
+      setEntries((prev) => {
+        const updated = [...prev, aiEntry];
+        // 检查阶段是否变化
+        const afterStage = getStageIndex(updated.length);
+        if (afterStage !== timer.currentStage) {
+          timer.updateStage(afterStage);
+        }
+        return updated;
+      });
       setRoundNumber((r) => r + 1);
     }
   }, [
@@ -320,11 +424,13 @@ function VsAiContent() {
     userSide,
     roundNumber,
     fetchAiResponse,
+    timer,
   ]);
 
   // ====== 结束辩论 ======
   const handleFinish = useCallback(async () => {
     if (entries.length < 2) return;
+    timer.stop();
     setIsFinished(true);
     setIsGeneratingReport(true);
 
@@ -491,7 +597,7 @@ function VsAiContent() {
             {isFinished && report && !isGeneratingReport && (
               <button
                 onClick={() =>
-                  downloadPdf(topic, entries, report, userSide, aiAlias)
+                  downloadPdf(topic, entries, report, userSide, aiAlias, timer.stageTimes, timer.totalSeconds)
                 }
                 className="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
                 title="下载辩论全文+评审报告"
@@ -525,6 +631,77 @@ function VsAiContent() {
         </div>
       </header>
 
+      {/* Stage timer bar */}
+      <div className="shrink-0 bg-white border-b border-gray-100">
+        <div className="max-w-4xl mx-auto px-4 py-2">
+          <div className="flex items-center gap-1">
+            {VS_AI_STAGES.map((stage, idx) => {
+              const isCurrent = getStageIndex(entries.length) === idx && !isFinished;
+              const isPast = getStageIndex(entries.length) > idx || isFinished;
+              const stageTime = timer.stageTimes[idx] || 0;
+              return (
+                <div key={idx} className="flex-1 relative">
+                  {/* Connector line */}
+                  {idx > 0 && (
+                    <div className={`absolute -left-0.5 top-3 w-1 h-px ${isPast || isCurrent ? "bg-blue-300" : "bg-gray-200"}`} />
+                  )}
+                  <div
+                    className={`flex flex-col items-center gap-0.5 py-1 px-1 rounded-lg transition-all ${
+                      isCurrent
+                        ? "bg-gradient-to-b from-blue-50 to-white ring-1 ring-blue-200 shadow-sm"
+                        : isPast
+                        ? "opacity-60"
+                        : "opacity-30"
+                    }`}
+                  >
+                    {/* Stage icon + name */}
+                    <div className="flex items-center gap-1">
+                      <span
+                        className={`text-xs font-bold ${
+                          isCurrent
+                            ? "text-blue-600"
+                            : isPast
+                            ? "text-green-600"
+                            : "text-gray-400"
+                        }`}
+                      >
+                        {isPast && !isCurrent ? "✓" : stage.icon}
+                      </span>
+                      <span
+                        className={`text-xs font-medium ${
+                          isCurrent ? "text-gray-800" : "text-gray-500"
+                        }`}
+                      >
+                        {stage.name}
+                      </span>
+                    </div>
+                    {/* Timer */}
+                    <span
+                      className={`text-xs font-mono tabular-nums ${
+                        isCurrent
+                          ? "text-blue-600 font-semibold"
+                          : stageTime > 0
+                          ? "text-gray-400"
+                          : "text-gray-300"
+                      }`}
+                    >
+                      {formatTime(stageTime)}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+            {/* Total time */}
+            <div className="shrink-0 flex flex-col items-center gap-0.5 py-1 px-2 ml-1 border-l border-gray-200">
+              <span className="text-xs text-gray-400">总计</span>
+              <span className="text-xs font-mono tabular-nums font-semibold text-gray-700">
+                {formatTime(timer.totalSeconds)}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Chat area */}
       <div ref={chatRef} className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-6 space-y-4">
@@ -545,18 +722,40 @@ function VsAiContent() {
             </div>
           )}
 
-          {/* Entries */}
-          {entries.map((entry, idx) => (
-            <ChatBubble
-              key={idx}
-              entry={entry}
-              userSide={userSide}
-              aiAlias={aiAlias}
-              speakingId={speakingId}
-              onSpeak={speak}
-              idx={idx}
-            />
-          ))}
+          {/* Entries with stage dividers */}
+          {entries.map((entry, idx) => {
+            const stageIdx = entry.stageIndex ?? getStageIndex(idx);
+            const prevStageIdx = idx > 0
+              ? (entries[idx - 1].stageIndex ?? getStageIndex(idx - 1))
+              : -1;
+            const showDivider = stageIdx !== prevStageIdx;
+            const stage = VS_AI_STAGES[stageIdx];
+
+            return (
+              <div key={idx}>
+                {showDivider && stage && (
+                  <div className="flex items-center gap-3 my-4">
+                    <div className="flex-1 h-px bg-gray-200" />
+                    <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-100 text-xs text-gray-500">
+                      <span className="font-bold">{stage.icon}</span>
+                      <span className="font-medium">{stage.name}</span>
+                      <span className="text-gray-400">·</span>
+                      <span className="text-gray-400">{stage.description}</span>
+                    </div>
+                    <div className="flex-1 h-px bg-gray-200" />
+                  </div>
+                )}
+                <ChatBubble
+                  entry={entry}
+                  userSide={userSide}
+                  aiAlias={aiAlias}
+                  speakingId={speakingId}
+                  onSpeak={speak}
+                  idx={idx}
+                />
+              </div>
+            );
+          })}
 
           {/* Streaming AI response */}
           {isAiThinking && streamingText && (
@@ -758,7 +957,9 @@ function VsAiContent() {
                           entries,
                           report,
                           userSide,
-                          aiAlias
+                          aiAlias,
+                          timer.stageTimes,
+                          timer.totalSeconds
                         )
                       }
                       className="px-5 py-2.5 text-sm bg-gray-900 text-white rounded-xl hover:bg-gray-800 flex items-center gap-1.5"
