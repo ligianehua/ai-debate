@@ -10,7 +10,7 @@ interface DebateEntry {
   speaker: string;
   side: "pro" | "con";
   content: string;
-  personality?: string;
+  character?: string; // 真实角色名（马东、蔡康永等）
 }
 
 // ============ TTS Hook ============
@@ -47,6 +47,62 @@ function useTTS() {
   return { speakingId, speak, stop };
 }
 
+// ============ PDF Download ============
+function generatePdfHtml(topic: string, entries: DebateEntry[], report: string): string {
+  const debateHtml = entries.map(e => {
+    const sideLabel = e.side === "pro" ? "🔵 正方" : "🔴 反方";
+    const charLabel = e.character ? ` · ${e.character}` : "";
+    return `
+      <div style="margin-bottom:20px;page-break-inside:avoid;">
+        <div style="font-size:13px;font-weight:bold;color:${e.side === "pro" ? "#2563eb" : "#dc2626"};margin-bottom:6px;">
+          ${sideLabel} | ${e.speaker}${charLabel} — ${e.stageName}
+        </div>
+        <div style="font-size:14px;line-height:1.8;color:#333;padding-left:12px;border-left:3px solid ${e.side === "pro" ? "#93c5fd" : "#fca5a5"};">
+          ${e.content.replace(/\n/g, "<br/>")}
+        </div>
+      </div>`;
+  }).join("");
+
+  // Convert markdown report to simple HTML
+  const reportHtml = report
+    .replace(/^## (.+)$/gm, '<h2 style="font-size:16px;font-weight:bold;margin:20px 0 8px;color:#1a1a1a;">$1</h2>')
+    .replace(/^### (.+)$/gm, '<h3 style="font-size:14px;font-weight:bold;margin:16px 0 6px;color:#333;">$1</h3>')
+    .replace(/^- (.+)$/gm, '<div style="margin:4px 0 4px 16px;">• $1</div>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n{2,}/g, '<br/><br/>')
+    .replace(/\n/g, '<br/>');
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>AI辩论 - ${topic}</title>
+<style>
+  @page{margin:60px 50px;}
+  body{font-family:"PingFang SC","Microsoft YaHei","Helvetica Neue",sans-serif;color:#333;max-width:700px;margin:0 auto;padding:40px 20px;}
+  h1{font-size:22px;text-align:center;margin-bottom:8px;}
+  .subtitle{text-align:center;color:#888;font-size:13px;margin-bottom:40px;}
+  .section-title{font-size:18px;font-weight:bold;margin:40px 0 20px;padding-bottom:8px;border-bottom:2px solid #e5e7eb;}
+  .report{font-size:14px;line-height:1.8;color:#333;}
+</style></head><body>
+<h1>🎯 AI 辩论场</h1>
+<div class="subtitle">辩题：${topic}</div>
+<div class="section-title">📜 辩论全文</div>
+${debateHtml}
+${report ? `<div class="section-title">📋 评审报告</div><div class="report">${reportHtml}</div>` : ""}
+<div style="text-align:center;margin-top:40px;padding-top:20px;border-top:1px solid #e5e7eb;color:#aaa;font-size:12px;">
+  由 AI 辩论场自动生成 · ${new Date().toLocaleDateString("zh-CN")}
+</div>
+</body></html>`;
+}
+
+function downloadPdf(topic: string, entries: DebateEntry[], report: string) {
+  const html = generatePdfHtml(topic, entries, report);
+  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `AI辩论_${topic.slice(0, 20)}.html`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // ============ Main Component ============
 function DebateContent() {
   const searchParams = useSearchParams();
@@ -59,6 +115,7 @@ function DebateContent() {
   const [streamingSide, setStreamingSide] = useState<"pro" | "con">("pro");
   const [streamingSpeaker, setStreamingSpeaker] = useState("");
   const [streamingStageName, setStreamingStageName] = useState("");
+  const [streamingCharacter, setStreamingCharacter] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
   const [report, setReport] = useState("");
@@ -95,13 +152,16 @@ function DebateContent() {
         : (stage.side as "pro" | "con");
       const speaker = isFree ? (freeRoundNum % 2 === 0 ? "正方" : "反方") : stage.speaker;
       const stageName = isFree ? `自由辩论 · 第${freeRoundNum + 1}轮` : stage.name;
+      const character = stage.character || "";
 
-      setStatus(`${stage.name} — ${speaker}发言中...`);
+      const displayName = character ? `${speaker}(${character})` : speaker;
+      setStatus(`${stage.name} — ${displayName}发言中...`);
       setIsStreaming(true);
       setStreamingText("");
       setStreamingSide(side);
       setStreamingSpeaker(speaker);
       setStreamingStageName(stageName);
+      setStreamingCharacter(character);
 
       const res = await fetch("/api/debate", {
         method: "POST",
@@ -145,7 +205,7 @@ function DebateContent() {
 
       setIsStreaming(false);
       setStreamingText("");
-      return { stageId: stage.id, stageName, speaker, side, content: fullText, personality: stage.personality } as DebateEntry;
+      return { stageId: stage.id, stageName, speaker, side, content: fullText, character } as DebateEntry;
     },
     [topic]
   );
@@ -194,7 +254,7 @@ function DebateContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           topic, mode: "judge",
-          history: allEntries.map((e) => ({ speaker: e.speaker, content: e.content })),
+          history: allEntries.map((e) => ({ speaker: `${e.speaker}${e.character ? `(${e.character})` : ""}`, content: e.content })),
         }),
       });
 
@@ -255,7 +315,19 @@ function DebateContent() {
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <button onClick={() => { stopTTS(); router.push("/"); }} className="text-gray-400 hover:text-gray-600 text-sm">&larr; 返回</button>
           <h1 className="text-sm font-semibold text-gray-800 truncate max-w-lg mx-4">{topic}</h1>
-          <div className="text-xs text-gray-400 whitespace-nowrap">{status}</div>
+          <div className="flex items-center gap-3">
+            <div className="text-xs text-gray-400 whitespace-nowrap">{status}</div>
+            {isFinished && report && !isGeneratingReport && (
+              <button
+                onClick={() => downloadPdf(topic, entries, report)}
+                className="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
+                title="下载辩论全文+评审报告"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                下载
+              </button>
+            )}
+          </div>
         </div>
         <div className="h-0.5 bg-gray-100">
           <div className="h-full bg-gradient-to-r from-blue-500 to-red-500 transition-all duration-500" style={{ width: `${progress}%` }} />
@@ -276,7 +348,7 @@ function DebateContent() {
               <DebateCard key={`pro-${idx}`} entry={entry} speakingId={speakingId} onSpeak={speak} />
             ))}
             {isStreaming && streamingSide === "pro" && streamingText && (
-              <DebateCard entry={{ stageId: "", stageName: streamingStageName, speaker: streamingSpeaker, side: "pro", content: streamingText }} streaming speakingId={speakingId} onSpeak={speak} />
+              <DebateCard entry={{ stageId: "", stageName: streamingStageName, speaker: streamingSpeaker, side: "pro", content: streamingText, character: streamingCharacter }} streaming speakingId={speakingId} onSpeak={speak} />
             )}
             {isStreaming && streamingSide === "pro" && !streamingText && (
               <div className="flex items-center gap-2 px-3 py-2 text-gray-400 text-sm"><span className="animate-pulse-dot">●</span><span>正在思考...</span></div>
@@ -296,7 +368,7 @@ function DebateContent() {
               <DebateCard key={`con-${idx}`} entry={entry} speakingId={speakingId} onSpeak={speak} />
             ))}
             {isStreaming && streamingSide === "con" && streamingText && (
-              <DebateCard entry={{ stageId: "", stageName: streamingStageName, speaker: streamingSpeaker, side: "con", content: streamingText }} streaming speakingId={speakingId} onSpeak={speak} />
+              <DebateCard entry={{ stageId: "", stageName: streamingStageName, speaker: streamingSpeaker, side: "con", content: streamingText, character: streamingCharacter }} streaming speakingId={speakingId} onSpeak={speak} />
             )}
             {isStreaming && streamingSide === "con" && !streamingText && (
               <div className="flex items-center gap-2 px-3 py-2 text-gray-400 text-sm"><span className="animate-pulse-dot">●</span><span>正在思考...</span></div>
@@ -327,8 +399,12 @@ function DebateContent() {
                 </div>
                 {!isGeneratingReport && (
                   <div className="px-6 py-4 border-t border-gray-100 flex justify-center gap-3 sticky bottom-0 bg-white rounded-b-2xl">
-                    <button onClick={() => router.push("/")} className="px-5 py-2.5 text-sm bg-gray-900 text-white rounded-xl hover:bg-gray-800">新的辩论</button>
-                    <button onClick={() => { stopTTS(); setReport(""); }} className="px-5 py-2.5 text-sm border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50">关闭报告</button>
+                    <button onClick={() => downloadPdf(topic, entries, report)} className="px-5 py-2.5 text-sm bg-gray-900 text-white rounded-xl hover:bg-gray-800 flex items-center gap-1.5">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                      下载全文
+                    </button>
+                    <button onClick={() => router.push("/")} className="px-5 py-2.5 text-sm border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50">新的辩论</button>
+                    <button onClick={() => { stopTTS(); setReport(""); }} className="px-5 py-2.5 text-sm border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50">关闭</button>
                   </div>
                 )}
               </>
@@ -352,7 +428,11 @@ function DebateCard({ entry, streaming = false, speakingId, onSpeak }: {
     <div className={`animate-fade-in rounded-xl border overflow-hidden ${isPro ? "border-blue-100 bg-white" : "border-red-100 bg-white"}`}>
       <div className={`flex items-center gap-2 px-3 py-2 border-b ${isPro ? "border-blue-50 bg-blue-50/40" : "border-red-50 bg-red-50/40"}`}>
         <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${isPro ? "bg-blue-100 text-blue-700" : "bg-red-100 text-red-700"}`}>{entry.speaker}</span>
-        {entry.personality && <span className="px-1.5 py-0.5 rounded text-xs bg-gray-100 text-gray-500">#{entry.personality}</span>}
+        {entry.character && (
+          <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${isPro ? "bg-blue-50 text-blue-600 border border-blue-200" : "bg-red-50 text-red-600 border border-red-200"}`}>
+            {entry.character}
+          </span>
+        )}
         <span className="text-xs text-gray-400 flex-1">{entry.stageName}</span>
         {streaming ? (
           <span className="text-xs text-gray-400 animate-pulse-dot">发言中...</span>
