@@ -10,7 +10,8 @@ interface DebateEntry {
   speaker: string;
   side: "pro" | "con";
   content: string;
-  character?: string; // 真实角色名（马东、蔡康永等）
+  character?: string; // 真实角色名（用于PDF）
+  alias?: string;     // 趣味代号（用于UI显示）
 }
 
 // ============ TTS Hook ============
@@ -116,6 +117,7 @@ function DebateContent() {
   const [streamingSpeaker, setStreamingSpeaker] = useState("");
   const [streamingStageName, setStreamingStageName] = useState("");
   const [streamingCharacter, setStreamingCharacter] = useState("");
+  const [streamingAlias, setStreamingAlias] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
   const [report, setReport] = useState("");
@@ -153,8 +155,9 @@ function DebateContent() {
       const speaker = isFree ? (freeRoundNum % 2 === 0 ? "正方" : "反方") : stage.speaker;
       const stageName = isFree ? `自由辩论 · 第${freeRoundNum + 1}轮` : stage.name;
       const character = stage.character || "";
+      const alias = stage.alias || "";
 
-      const displayName = character ? `${speaker}(${character})` : speaker;
+      const displayName = alias ? `${speaker} · ${alias}` : speaker;
       setStatus(`${stage.name} — ${displayName}发言中...`);
       setIsStreaming(true);
       setStreamingText("");
@@ -162,6 +165,7 @@ function DebateContent() {
       setStreamingSpeaker(speaker);
       setStreamingStageName(stageName);
       setStreamingCharacter(character);
+      setStreamingAlias(alias);
 
       const res = await fetch("/api/debate", {
         method: "POST",
@@ -205,7 +209,7 @@ function DebateContent() {
 
       setIsStreaming(false);
       setStreamingText("");
-      return { stageId: stage.id, stageName, speaker, side, content: fullText, character } as DebateEntry;
+      return { stageId: stage.id, stageName, speaker, side, content: fullText, character, alias } as DebateEntry;
     },
     [topic]
   );
@@ -348,7 +352,7 @@ function DebateContent() {
               <DebateCard key={`pro-${idx}`} entry={entry} speakingId={speakingId} onSpeak={speak} />
             ))}
             {isStreaming && streamingSide === "pro" && streamingText && (
-              <DebateCard entry={{ stageId: "", stageName: streamingStageName, speaker: streamingSpeaker, side: "pro", content: streamingText, character: streamingCharacter }} streaming speakingId={speakingId} onSpeak={speak} />
+              <DebateCard entry={{ stageId: "", stageName: streamingStageName, speaker: streamingSpeaker, side: "pro", content: streamingText, character: streamingCharacter, alias: streamingAlias }} streaming speakingId={speakingId} onSpeak={speak} />
             )}
             {isStreaming && streamingSide === "pro" && !streamingText && (
               <div className="flex items-center gap-2 px-3 py-2 text-gray-400 text-sm"><span className="animate-pulse-dot">●</span><span>正在思考...</span></div>
@@ -368,7 +372,7 @@ function DebateContent() {
               <DebateCard key={`con-${idx}`} entry={entry} speakingId={speakingId} onSpeak={speak} />
             ))}
             {isStreaming && streamingSide === "con" && streamingText && (
-              <DebateCard entry={{ stageId: "", stageName: streamingStageName, speaker: streamingSpeaker, side: "con", content: streamingText, character: streamingCharacter }} streaming speakingId={speakingId} onSpeak={speak} />
+              <DebateCard entry={{ stageId: "", stageName: streamingStageName, speaker: streamingSpeaker, side: "con", content: streamingText, character: streamingCharacter, alias: streamingAlias }} streaming speakingId={speakingId} onSpeak={speak} />
             )}
             {isStreaming && streamingSide === "con" && !streamingText && (
               <div className="flex items-center gap-2 px-3 py-2 text-gray-400 text-sm"><span className="animate-pulse-dot">●</span><span>正在思考...</span></div>
@@ -428,9 +432,9 @@ function DebateCard({ entry, streaming = false, speakingId, onSpeak }: {
     <div className={`animate-fade-in rounded-xl border overflow-hidden ${isPro ? "border-blue-100 bg-white" : "border-red-100 bg-white"}`}>
       <div className={`flex items-center gap-2 px-3 py-2 border-b ${isPro ? "border-blue-50 bg-blue-50/40" : "border-red-50 bg-red-50/40"}`}>
         <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${isPro ? "bg-blue-100 text-blue-700" : "bg-red-100 text-red-700"}`}>{entry.speaker}</span>
-        {entry.character && (
+        {entry.alias && (
           <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${isPro ? "bg-blue-50 text-blue-600 border border-blue-200" : "bg-red-50 text-red-600 border border-red-200"}`}>
-            {entry.character}
+            {entry.alias}
           </span>
         )}
         <span className="text-xs text-gray-400 flex-1">{entry.stageName}</span>

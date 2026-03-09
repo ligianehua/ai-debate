@@ -4,7 +4,8 @@ export interface DebateStage {
   side: "pro" | "con" | "both" | "judge";
   speaker: string;
   description: string;
-  character?: string; // 真实角色名
+  character?: string; // 真实角色名（用于 AI prompt）
+  alias?: string;     // 显示代号（用于 UI）
   rounds?: number;
 }
 
@@ -12,6 +13,16 @@ export interface DebateStage {
 const CHARACTER_POOL = [
   "马东", "蔡康永", "马薇薇", "陈铭", "黄执中", "高晓松",
 ];
+
+// 对应的趣味代号
+const ALIAS_MAP: Record<string, string> = {
+  马东:   "金句收割机 🎯",
+  蔡康永: "温柔刀客 🌊",
+  马薇薇: "逻辑女王 👑",
+  陈铭:   "学术暖男 📚",
+  黄执中: "辩论之神 ⚡",
+  高晓松: "行走的百科 🌍",
+};
 
 // 随机打散并分配角色到6个位置（正方一二三辩 + 反方一二三辩）
 // 四辩（总结陈词）不固定分配，由同一方最有代表性的角色来做
@@ -30,6 +41,7 @@ export const DEBATE_STAGES: DebateStage[] = [
     speaker: "正方一辩",
     description: "阐述正方立场，提出核心论点和论据",
     character: assigned[0],
+    alias: ALIAS_MAP[assigned[0]],
   },
   {
     id: "con-opening",
@@ -38,6 +50,7 @@ export const DEBATE_STAGES: DebateStage[] = [
     speaker: "反方一辩",
     description: "阐述反方立场，提出核心论点和论据",
     character: assigned[1],
+    alias: ALIAS_MAP[assigned[1]],
   },
   {
     id: "pro-rebuttal",
@@ -46,6 +59,7 @@ export const DEBATE_STAGES: DebateStage[] = [
     speaker: "正方二辩",
     description: "针对反方论点进行反驳，补充正方论据",
     character: assigned[2],
+    alias: ALIAS_MAP[assigned[2]],
   },
   {
     id: "con-rebuttal",
@@ -54,6 +68,7 @@ export const DEBATE_STAGES: DebateStage[] = [
     speaker: "反方二辩",
     description: "针对正方论点进行反驳，补充反方论据",
     character: assigned[3],
+    alias: ALIAS_MAP[assigned[3]],
   },
   {
     id: "pro-cross",
@@ -62,6 +77,7 @@ export const DEBATE_STAGES: DebateStage[] = [
     speaker: "正方三辩",
     description: "针对反方逻辑漏洞发起质疑，追问核心矛盾",
     character: assigned[4],
+    alias: ALIAS_MAP[assigned[4]],
   },
   {
     id: "con-cross",
@@ -70,6 +86,7 @@ export const DEBATE_STAGES: DebateStage[] = [
     speaker: "反方三辩",
     description: "针对正方逻辑漏洞发起质疑，追问核心矛盾",
     character: assigned[5],
+    alias: ALIAS_MAP[assigned[5]],
   },
   {
     id: "free-debate",
@@ -86,6 +103,7 @@ export const DEBATE_STAGES: DebateStage[] = [
     speaker: "反方四辩",
     description: "总结反方全部论点，做最后陈述",
     character: assigned[1], // 反方一辩兼任四辩总结
+    alias: ALIAS_MAP[assigned[1]],
   },
   {
     id: "pro-closing",
@@ -94,6 +112,7 @@ export const DEBATE_STAGES: DebateStage[] = [
     speaker: "正方四辩",
     description: "总结正方全部论点，做最后陈述",
     character: assigned[0], // 正方一辩兼任四辩总结
+    alias: ALIAS_MAP[assigned[0]],
   },
 ];
 
