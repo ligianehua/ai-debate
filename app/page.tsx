@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import AuthButton from "@/app/components/AuthButton";
 
 const EXAMPLE_TOPICS = [
   "现在的孩子应该「快乐教育」还是「精英教育」？",
@@ -31,6 +32,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center px-4">
+      <AuthButton />
       <div className="w-full max-w-2xl text-center">
         {/* Logo */}
         <div className="mb-8">

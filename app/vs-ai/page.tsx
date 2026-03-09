@@ -9,6 +9,8 @@ import {
   Suspense,
 } from "react";
 import { pickCharacter } from "@/lib/debate-config";
+import { getCurrentUser } from "@/lib/auth";
+import { saveDebateRecord } from "@/lib/history";
 
 interface ChatEntry {
   role: "user" | "ai";
@@ -480,11 +482,64 @@ function VsAiContent() {
         }
       }
       setIsGeneratingReport(false);
+
+      // 保存辩论记录到历史
+      saveRecord(reportText);
     } catch (err) {
       setError(err instanceof Error ? err.message : "生成报告出错");
       setIsGeneratingReport(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entries, topic, aiSide, aiCharacterName, aiAlias]);
+
+  // ====== 保存辩论记录 ======
+  const saveRecord = useCallback(
+    (reportText: string) => {
+      const user = getCurrentUser();
+      if (!user) return; // 未登录不保存
+
+      // 从报告中尝试解析分数
+      let userScore = 0;
+      let aiScore = 0;
+      let result: "win" | "lose" | "draw" | "unknown" = "unknown";
+
+      const scoreMatch = reportText.match(
+        /人类选手\s*(\d+(?:\.\d+)?)\s*vs\s*AI选手\s*(\d+(?:\.\d+)?)/
+      );
+      if (scoreMatch) {
+        userScore = parseFloat(scoreMatch[1]);
+        aiScore = parseFloat(scoreMatch[2]);
+        if (userScore > aiScore) result = "win";
+        else if (userScore < aiScore) result = "lose";
+        else result = "draw";
+      }
+
+      saveDebateRecord({
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        userId: user.id,
+        type: "user-vs-ai",
+        topic,
+        userSide,
+        aiCharacter: aiCharacterName,
+        aiAlias,
+        result,
+        userScore,
+        aiScore,
+        totalRounds: Math.floor(entries.length / 2),
+        totalTime: timer.totalSeconds,
+        stageTimes: timer.stageTimes,
+        entries: entries.map((e) => ({
+          role: e.role,
+          speaker: e.role === "user" ? "人类选手" : aiAlias,
+          content: e.content,
+          side: e.side,
+        })),
+        report: reportText,
+        createdAt: Date.now(),
+      });
+    },
+    [topic, userSide, aiCharacterName, aiAlias, entries, timer]
+  );
 
   // ====== 语音输入 ======
   const toggleListening = useCallback(() => {
