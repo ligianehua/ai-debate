@@ -5,6 +5,7 @@ import {
   buildSystemPrompt,
   buildJudgePrompt,
 } from "@/lib/debate-config";
+import { researchTopic } from "@/lib/research";
 
 export async function POST(request: NextRequest) {
   const { topic, stageIndex, history, mode } = await request.json();
@@ -12,6 +13,9 @@ export async function POST(request: NextRequest) {
   if (!topic) {
     return Response.json({ error: "缺少辩题" }, { status: 400 });
   }
+
+  // 获取辩题研究简报（有缓存，同一辩题只调用一次 AI）
+  const research = await researchTopic(topic);
 
   // 生成评委报告
   if (mode === "judge") {
@@ -50,7 +54,8 @@ export async function POST(request: NextRequest) {
     side as "pro" | "con",
     topic,
     stage,
-    freeSub as "pro" | "con" | undefined
+    freeSub as "pro" | "con" | undefined,
+    research // 传入研究简报
   );
 
   const messages: ChatMessage[] = [{ role: "system", content: systemPrompt }];

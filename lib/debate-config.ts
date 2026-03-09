@@ -182,7 +182,8 @@ export function buildSystemPrompt(
   side: "pro" | "con",
   topic: string,
   stage: DebateStage,
-  isFreeSub?: "pro" | "con"
+  isFreeSub?: "pro" | "con",
+  research?: string
 ): string {
   const actualSide = isFreeSub || side;
   const sideLabel = actualSide === "pro" ? "正方" : "反方";
@@ -297,6 +298,8 @@ export function buildSystemPrompt(
 - 用具体代替抽象：一个真实故事 > 十句大道理，一个精准类比 > 十段论述
 - 绝不允许出现"综上所述""由此可见""不言而喻"这种八股文
 ${conBoost}
+
+${research ? `【辩前研究简报——以下是关于这个辩题的最新背景资料，你可以在发言中引用其中的数据、案例和观点，但要自然融入你的论述，不要照搬】\n${research}` : ""}
 
 ${thinkingFramework}
 
