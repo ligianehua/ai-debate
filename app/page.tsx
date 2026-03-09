@@ -11,13 +11,22 @@ const EXAMPLE_TOPICS = [
   "远程办公会取代传统办公吗？",
 ];
 
+type Mode = "ai-vs-ai" | "user-vs-ai";
+
 export default function Home() {
   const [topic, setTopic] = useState("");
+  const [mode, setMode] = useState<Mode>("ai-vs-ai");
+  const [side, setSide] = useState<"pro" | "con">("pro");
   const router = useRouter();
 
   const startDebate = () => {
     if (!topic.trim()) return;
-    router.push(`/debate?topic=${encodeURIComponent(topic.trim())}`);
+    const t = encodeURIComponent(topic.trim());
+    if (mode === "ai-vs-ai") {
+      router.push(`/debate?topic=${t}`);
+    } else {
+      router.push(`/vs-ai?topic=${t}&side=${side}`);
+    }
   };
 
   return (
@@ -31,10 +40,66 @@ export default function Home() {
             </div>
             <h1 className="text-3xl font-bold tracking-tight">AI 辩论场</h1>
           </div>
-          <p className="text-gray-500 text-sm">
-            输入辩题，两位 AI 将代表正反方进行一场完整辩论
-          </p>
+          <p className="text-gray-500 text-sm">选择模式，输入辩题，开始一场精彩辩论</p>
         </div>
+
+        {/* Mode selector */}
+        <div className="flex justify-center gap-3 mb-6">
+          <button
+            onClick={() => setMode("ai-vs-ai")}
+            className={`flex items-center gap-2 px-5 py-3 rounded-xl border-2 transition-all ${
+              mode === "ai-vs-ai"
+                ? "border-blue-500 bg-blue-50 text-blue-700"
+                : "border-gray-200 bg-white text-gray-500 hover:border-gray-300"
+            }`}
+          >
+            <span className="text-lg">🤖</span>
+            <div className="text-left">
+              <div className="text-sm font-semibold">AI vs AI</div>
+              <div className="text-xs opacity-70">观看 AI 对决</div>
+            </div>
+          </button>
+          <button
+            onClick={() => setMode("user-vs-ai")}
+            className={`flex items-center gap-2 px-5 py-3 rounded-xl border-2 transition-all ${
+              mode === "user-vs-ai"
+                ? "border-red-500 bg-red-50 text-red-700"
+                : "border-gray-200 bg-white text-gray-500 hover:border-gray-300"
+            }`}
+          >
+            <span className="text-lg">🎤</span>
+            <div className="text-left">
+              <div className="text-sm font-semibold">我 vs AI</div>
+              <div className="text-xs opacity-70">亲自上场辩论</div>
+            </div>
+          </button>
+        </div>
+
+        {/* Side selector (only for user-vs-ai) */}
+        {mode === "user-vs-ai" && (
+          <div className="flex justify-center gap-3 mb-6 animate-fade-in">
+            <button
+              onClick={() => setSide("pro")}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                side === "pro"
+                  ? "bg-blue-500 text-white shadow-md"
+                  : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+              }`}
+            >
+              🔵 我打正方
+            </button>
+            <button
+              onClick={() => setSide("con")}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                side === "con"
+                  ? "bg-red-500 text-white shadow-md"
+                  : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+              }`}
+            >
+              🔴 我打反方
+            </button>
+          </div>
+        )}
 
         {/* Input */}
         <div className="relative mb-6">
@@ -51,15 +116,13 @@ export default function Home() {
             disabled={!topic.trim()}
             className="absolute right-2 top-1/2 -translate-y-1/2 px-6 py-2.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl font-medium hover:from-blue-700 hover:to-blue-600 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
-            开始辩论
+            {mode === "ai-vs-ai" ? "开始辩论" : "开始挑战"}
           </button>
         </div>
 
         {/* Examples */}
         <div className="space-y-2">
-          <p className="text-xs text-gray-400 uppercase tracking-wider">
-            试试这些辩题
-          </p>
+          <p className="text-xs text-gray-400 uppercase tracking-wider">试试这些辩题</p>
           <div className="flex flex-wrap justify-center gap-2">
             {EXAMPLE_TOPICS.map((t) => (
               <button

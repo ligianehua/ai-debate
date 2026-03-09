@@ -376,3 +376,120 @@ export function buildJudgePrompt(topic: string): string {
 
 Markdown格式，说人话，有态度。`;
 }
+
+// ========== 用户 vs AI 模式 ==========
+
+/** 随机选一个角色 */
+export function pickCharacter(): { name: string; alias: string } {
+  const idx = Math.floor(Math.random() * CHARACTER_POOL.length);
+  const name = CHARACTER_POOL[idx];
+  return { name, alias: ALIAS_MAP[name] };
+}
+
+/** 为用户对战模式构建 AI 辩手的 system prompt */
+export function buildVsAiPrompt(
+  characterName: string,
+  aiSide: "pro" | "con",
+  topic: string,
+  research: string,
+  roundNumber: number
+): string {
+  const sideLabel = aiSide === "pro" ? "正方" : "反方";
+  const oppLabel = aiSide === "pro" ? "反方" : "正方";
+  const characterPrompt = CHARACTERS[characterName] || "";
+
+  const roundInstruction =
+    roundNumber === 0
+      ? `这是辩论的开场。你先发言，用一段精彩的开场白亮明立场。
+要求：
+- 开头用一个引人注目的故事/数据/类比抓住注意力
+- 抛出1-2个核心论点
+- 语气要有挑战性，激发对手回应的欲望
+- 300-400字`
+      : `这是第 ${roundNumber + 1} 轮交锋。
+要求：
+- 必须直接回应对方上一次发言的具体论点——不能自说自话
+- 找到对方论证中的漏洞或隐含假设进行攻击
+- 每轮推进一个新角度或新论据，不要重复之前说过的
+- 如果对方回避了你的问题，追着问
+- 200-350字，节奏要紧凑`;
+
+  return `${characterPrompt}
+
+你正在与一位人类辩手进行一对一的《奇葩说》风格辩论。
+
+辩题：「${topic}」
+你的立场：${sideLabel}
+对手立场：${oppLabel}
+
+核心要求：
+- 完全代入${characterName}的角色：用他的语气、思维方式、最擅长的论证手法
+- 你在跟一个真人辩论，要有对话感和交锋感
+- 紧扣对手说的话回应，不要自说自话
+- 用具体代替抽象：一个真实故事 > 十句大道理
+- 适当的攻击性——这是辩论，不是和平讨论
+- 偶尔可以幽默、犀利、甚至带点挑衅（符合${characterName}的风格）
+- 绝不允许出现"综上所述""由此可见"这种八股文
+- 不要加任何角色前缀（不要写"${characterName}："之类的）
+
+${research ? `【辩前研究简报——你可以引用其中的数据和案例，但要自然融入论述】\n${research}\n` : ""}
+
+${roundInstruction}
+
+直接输出发言，不要输出思考过程。`;
+}
+
+/** 用户对战模式的评审报告 prompt */
+export function buildVsAiJudgePrompt(
+  topic: string,
+  userSide: "pro" | "con",
+  aiCharacterName: string,
+  aiAlias: string
+): string {
+  const userLabel = userSide === "pro" ? "正方（人类选手）" : "反方（人类选手）";
+  const aiLabel = userSide === "pro" ? `反方（${aiAlias}）` : `正方（${aiAlias}）`;
+
+  return `你是一个经验丰富、犀利但有建设性的辩论赛评委（类似《奇葩说》导师点评风格）。
+
+辩题：${topic}
+对阵双方：
+- ${userLabel}
+- ${aiLabel}
+
+评判维度：
+1. 论点质量——谁的论据更真实可信？逻辑更严密？
+2. 交锋质量——谁真正回应了对方？谁在回避？
+3. 角度选择——谁找到了更独特、更有力的切入角度？
+4. 表达能力——谁的表述更有说服力？更能打动人？
+5. 总体判断——综合所有维度，谁赢了？
+
+重要：公平公正！不要因为一方是AI就偏袒或打压。谁辩得好判谁赢。
+
+请生成评审报告：
+
+## 📊 总体印象
+2-3句话概括这场辩论。
+
+## 👤 人类选手表现
+- 最强论点是什么？
+- 逻辑推理能力如何？
+- 有哪些值得肯定的亮点？
+- 最大的问题或可以改进的地方？
+
+## 🤖 AI选手（${aiAlias}）表现
+- 最强论点是什么？
+- 风格发挥如何？
+- 有哪些精彩发挥？
+- 最大的问题？
+
+## ⚡ 名场面
+挑出2-3个最精彩的交锋，引用双方原话点评。
+
+## 🏆 最终裁定
+打分（如人类选手 7.5 vs AI选手 8.2），分维度评分，给出理由。
+
+## 💡 给人类选手的建议
+具体的辩论技巧提升建议（3-5条），帮助TA下次辩得更好。
+
+Markdown格式，说人话，有态度，有建设性。`;
+}
